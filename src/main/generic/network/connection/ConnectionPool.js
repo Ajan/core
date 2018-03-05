@@ -215,7 +215,7 @@ class ConnectionPool extends Observable {
         }
 
         if (peerAddress.protocol !== Protocol.WS && peerAddress.protocol !== Protocol.RTC) {
-            Log.e(Network, 'Cannot connect to {$this.peerAddress} - unsupported protocol');
+            Log.e(Network, `Cannot connect to ${peerAddress} - unsupported protocol`);
             return false;
         }
 

@@ -21,8 +21,10 @@ class BaseConsensusAgent extends Observable {
 
         // InvVectors we want to request via getData are collected here and
         // periodically requested.
-        /** @type {HashSet.<InvVector>} */
-        this._objectsToRequest = new HashSet();
+        /** @type {ThrottledQueue.<InvVector>} */
+        this._blocksToRequest = new ThrottledQueue();
+        /** @type {ThrottledQueue.<InvVector>} */
+        this._txsToRequest = new ThrottledQueue(BaseConsensusAgent.TRANSACTIONS_AT_ONCE + BaseConsensusAgent.FREE_TRANSACTIONS_AT_ONCE, BaseInventoryMessage.TRANSACTIONS_PER_SECOND + BaseInventoryMessage.FREE_TRANSACTIONS_PER_SECOND, 1000, BaseConsensusAgent.REQUEST_TRANSACTIONS_WAITING_MAX);
 
         // Objects that are currently being requested from the peer.
         /** @type {HashSet.<InvVector>} */
@@ -46,13 +48,13 @@ class BaseConsensusAgent extends Observable {
         this._timers = new Timers();
 
         // Queue of transaction inv vectors waiting to be sent out
-        /** @type {Queue.<InvVector>} */
-        this._waitingInvVectors = new Queue();
+        /** @type {ThrottledQueue.<InvVector>} */
+        this._waitingInvVectors = new ThrottledQueue(BaseConsensusAgent.TRANSACTIONS_AT_ONCE, BaseInventoryMessage.TRANSACTIONS_PER_SECOND, 1000, BaseConsensusAgent.REQUEST_TRANSACTIONS_WAITING_MAX);
         this._timers.setInterval('invVectors', () => this._sendWaitingInvVectors(), BaseConsensusAgent.TRANSACTION_RELAY_INTERVAL);
 
         // Queue of "free" transaction inv vectors waiting to be sent out
-        /** @type {Queue.<{serializedSize:number, vector:InvVector}>} */
-        this._waitingFreeInvVectors = new Queue();
+        /** @type {ThrottledQueue.<{serializedSize:number, vector:InvVector}>} */
+        this._waitingFreeInvVectors = new ThrottledQueue(BaseConsensusAgent.FREE_TRANSACTIONS_AT_ONCE, BaseInventoryMessage.FREE_TRANSACTIONS_PER_SECOND, 1000, BaseConsensusAgent.REQUEST_TRANSACTIONS_WAITING_MAX);
         this._timers.setInterval('freeInvVectors', () => this._sendFreeWaitingInvVectors(), BaseConsensusAgent.FREE_TRANSACTION_RELAY_INTERVAL);
 
         // Listen to consensus messages from the peer.
@@ -185,11 +187,13 @@ class BaseConsensusAgent extends Observable {
         for (const vector of msg.vectors) {
             this._knownObjects.add(vector);
             this._waitingInvVectors.remove(vector);
+            this._waitingFreeInvVectors.remove(vector);
         }
 
         // Check which of the advertised objects we know
         // Request unknown objects, ignore known ones.
-        const unknownObjects = [];
+        const unknownBlocks = [];
+        const unknownTxs = [];
         for (const vector of msg.vectors) {
             // Ignore objects that we are currently requesting / processing.
             if (this._objectsInFlight.contains(vector) || this._objectsProcessing.contains(vector)) {
@@ -205,7 +209,7 @@ class BaseConsensusAgent extends Observable {
                 case InvVector.Type.BLOCK: {
                     const block = await this._getBlock(vector.hash, /*includeForks*/ true); // eslint-disable-line no-await-in-loop
                     if (!block) {
-                        unknownObjects.push(vector);
+                        unknownBlocks.push(vector);
                         this._onNewBlockAnnounced(vector.hash);
                     } else {
                         this._onKnownBlockAnnounced(vector.hash, block);
@@ -215,7 +219,7 @@ class BaseConsensusAgent extends Observable {
                 case InvVector.Type.TRANSACTION: {
                     const transaction = await this._getTransaction(vector.hash); // eslint-disable-line no-await-in-loop
                     if (!transaction) {
-                        unknownObjects.push(vector);
+                        unknownTxs.push(vector);
                         this._onNewTransactionAnnounced(vector.hash);
                     } else {
                         this._onKnownTransactionAnnounced(vector.hash, transaction);
@@ -227,17 +231,18 @@ class BaseConsensusAgent extends Observable {
             }
         }
 
-        Log.v(BaseConsensusAgent, `[INV] ${msg.vectors.length} vectors (${unknownObjects.length} new) received from ${this._peer.peerAddress}`);
+        Log.v(BaseConsensusAgent, `[INV] ${msg.vectors.length} vectors (${unknownBlocks.length} new) received from ${this._peer.peerAddress}`);
 
-        if (unknownObjects.length > 0) {
+        if (unknownBlocks.length > 0) {
             // Store unknown vectors in objectsToRequest.
-            this._objectsToRequest.addAll(unknownObjects);
+            this._blocksToRequest.enqueueAllNew(unknownBlocks);
+            this._txsToRequest.enqueueAllNew(unknownTxs);
 
             // Clear the request throttle timeout.
             this._timers.clearTimeout('inv');
 
             // If there are enough objects queued up, send out a getData request.
-            if (this._objectsToRequest.length >= BaseConsensusAgent.REQUEST_THRESHOLD) {
+            if (this._blocksToRequest.available + this._txsToRequest.available >= BaseConsensusAgent.REQUEST_THRESHOLD) {
                 this._requestData();
             }
             // Otherwise, wait a short time for more inv messages to arrive, then request.
@@ -320,18 +325,18 @@ class BaseConsensusAgent extends Observable {
         if (!this._objectsInFlight.isEmpty()) return;
 
         // Don't do anything if there are no objects queued to request.
-        if (this._objectsToRequest.isEmpty()) return;
+        if (this._blocksToRequest.isAvailable() && this._txsToRequest.isAvailable()) return;
 
         // Request queued objects from the peer. Only request up to VECTORS_MAX_COUNT objects at a time.
         const vectorsMaxCount = BaseInventoryMessage.VECTORS_MAX_COUNT;
         /** @type {Array.<InvVector>} */
-        const vectors = Array.from(new LimitIterable(this._objectsToRequest.valueIterator(), vectorsMaxCount));
+        const vectors = this._blocksToRequest.dequeueMulti(vectorsMaxCount);
+        if (vectors.length < vectorsMaxCount) {
+            vectors.concat(this._txsToRequest.dequeueMulti(vectorsMaxCount - vectors.length));
+        }
 
         // Mark the requested objects as in-flight.
         this._objectsInFlight.addAll(vectors);
-
-        // Remove requested objects from queue.
-        this._objectsToRequest.removeAll(vectors);
 
         // Request data from peer.
         this._doRequestData(vectors);
@@ -516,7 +521,7 @@ class BaseConsensusAgent extends Observable {
         this._objectsInFlight.clear();
 
         // If there are more objects to request, request them.
-        if (!this._objectsToRequest.isEmpty()) {
+        if (!this._blocksToRequest.isEmpty() && !this._txsToRequest.isEmpty()) {
             this._requestData();
         } else {
             this._onAllObjectsReceived();
@@ -655,6 +660,10 @@ class BaseConsensusAgent extends Observable {
     _onClose() {
         // Clear all timers and intervals when the peer disconnects.
         this._timers.clearAll();
+        this._blocksToRequest.stop();
+        this._txsToRequest.stop();
+        this._waitingInvVectors.stop();
+        this._waitingFreeInvVectors.stop();
 
         // Notify listeners that the peer has disconnected.
         this.fire('close', this);
@@ -685,11 +694,15 @@ BaseConsensusAgent.REQUEST_THROTTLE = 500;
  * @type {number}
  */
 BaseConsensusAgent.REQUEST_TIMEOUT = 1000 * 10;
+BaseConsensusAgent.REQUEST_TRANSACTIONS_WAITING_MAX = 5000;
+BaseConsensusAgent.REQUEST_BLOCKS_WAITING_MAX = 5000;
 /**
  * Time interval (ms) to wait between sending out transactions.
  * @type {number}
  */
 BaseConsensusAgent.TRANSACTION_RELAY_INTERVAL = 5000;
+BaseConsensusAgent.TRANSACTIONS_AT_ONCE = 100;
+BaseConsensusAgent.TRANSACTIONS_PER_SECOND = 10;
 /**
  * Time interval (ms) to wait between sending out "free" transactions.
  * @type {number}
@@ -705,4 +718,6 @@ BaseConsensusAgent.FREE_TRANSACTION_SIZE_PER_INTERVAL = 15000; // ~100 legacy tr
  * @type {number}
  */
 BaseConsensusAgent.TRANSACTION_RELAY_FEE_MIN = 1;
+BaseConsensusAgent.FREE_TRANSACTIONS_AT_ONCE = 10;
+BaseConsensusAgent.FREE_TRANSACTIONS_PER_SECOND = 1;
 Class.register(BaseConsensusAgent);
