@@ -233,7 +233,7 @@ class BaseConsensusAgent extends Observable {
 
         Log.v(BaseConsensusAgent, `[INV] ${msg.vectors.length} vectors (${unknownBlocks.length} new) received from ${this._peer.peerAddress}`);
 
-        if (unknownBlocks.length > 0) {
+        if (unknownBlocks.length > 0 || unknownTxs > 0) {
             // Store unknown vectors in objectsToRequest.
             this._blocksToRequest.enqueueAllNew(unknownBlocks);
             this._txsToRequest.enqueueAllNew(unknownTxs);
@@ -325,7 +325,7 @@ class BaseConsensusAgent extends Observable {
         if (!this._objectsInFlight.isEmpty()) return;
 
         // Don't do anything if there are no objects queued to request.
-        if (this._blocksToRequest.isAvailable() && this._txsToRequest.isAvailable()) return;
+        if (!this._blocksToRequest.isAvailable() && !this._txsToRequest.isAvailable()) return;
 
         // Request queued objects from the peer. Only request up to VECTORS_MAX_COUNT objects at a time.
         const vectorsMaxCount = BaseInventoryMessage.VECTORS_MAX_COUNT;
