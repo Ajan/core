@@ -175,7 +175,7 @@ class Crypto {
      */
     static async blockVerify(block, transactionValid, timeNow) {
         const worker = await Crypto._cryptoWorkerAsync();
-        return worker.blockVerify(block, transactionValid, timeNow, Block.GENESIS.HASH.serialize());
+        return worker.blockVerify(block, transactionValid, timeNow, GenesisConfig.CURRENT_CONFIG.GENESIS_HASH.serialize());
     }
 
 

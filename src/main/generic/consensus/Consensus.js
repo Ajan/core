@@ -12,7 +12,7 @@ class Consensus {
         /** @type {Time} */
         const time = new Time();
         /** @type {ConsensusDB} */
-        const db = await ConsensusDB.getFull();
+        const db = await ConsensusDB.getFull(GenesisConfig.CURRENT_CONFIG.DATABASE_PREFIX);
         /** @type {Accounts} */
         const accounts = await Accounts.getPersistent(db);
         /** @type {TransactionStore} */
@@ -40,7 +40,7 @@ class Consensus {
         /** @type {Time} */
         const time = new Time();
         /** @type {ConsensusDB} */
-        const db = await ConsensusDB.getLight();
+        const db = await ConsensusDB.getLight(GenesisConfig.CURRENT_CONFIG.DATABASE_PREFIX);
         /** @type {Accounts} */
         const accounts = await Accounts.getPersistent(db);
         /** @type {LightChain} */

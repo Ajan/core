@@ -122,7 +122,6 @@ const sources = {
         './src/main/generic/consensus/nano/NanoMempool.js',
         './src/main/generic/consensus/ConsensusDB.js',
         './src/main/generic/consensus/Consensus.js',
-        './src/main/generic/consensus/Genesis.js',
         './src/main/generic/network/Protocol.js',
         './src/main/generic/network/message/Message.js',
         './src/main/generic/network/message/AddrMessage.js',
@@ -161,6 +160,7 @@ const sources = {
         './src/main/generic/network/address/PeerAddress.js',
         './src/main/generic/network/address/PeerAddressState.js',
         './src/main/generic/network/address/PeerAddressBook.js',
+        './src/main/generic/consensus/GenesisConfig.js',
         './src/main/generic/network/connection/CloseType.js',
         './src/main/generic/network/connection/NetworkConnection.js',
         './src/main/generic/network/connection/PeerChannel.js',
@@ -200,6 +200,7 @@ const sources = {
         './src/main/generic/utils/buffer/*.js',
         './src/main/generic/miner/MinerWorker*.js',
 
+        './src/main/platform/browser/worker/GenesisConfig.js',
         './src/main/generic/utils/array/ArrayUtils.js',
         './src/main/generic/utils/assert/Assert.js',
         './src/main/generic/utils/buffer/SerialBuffer.js',
