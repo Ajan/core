@@ -23,18 +23,13 @@ Dummy.signature5 = 'QPwwvbwjQKTkB/L33A7Y3ZOIF4MHhzjRGVi3nmQSmvpz8+/xPjcU/tlh9lfm
 // Transaction {_recipientAddr: Dummy.address1, _value: 9007199254740991, _fee: 1, _nonce: 4}
 Dummy.validTransaction = 'BHRjt7rp/Rt0BfsHyEDpJcCdpLS9811yp76Yy1An/NJ0voiRWw2sOtLZvxSoflYm7sVL963psAntQ3bmxOKH/UiR6SQPQVIjmC7cNFUyYwcQ6Up/UkM/////////P/AAAAAAAAAAAAAEpKNUjs8tXJjrrcRcAzDH4HUMpN8gSIiZT32G+iJZPejR5hWu24Z9NX73DzssJCsyTIM6iIG/z9UGQL3ucF7eKg==';
 
-if (typeof global !== 'undefined') {
-    global.Dummy = Dummy;
-}
+Dummy.NETCONFIG = new WsNetworkConfig('node1.test', 9000, 'key1', 'cert1');
+Dummy.NETCONFIG._keyPair = KeyPair.fromHex('ab05e735f870ff4482a997eab757ea78f8a83356ea443ac68969824184b82903a5ea83e7ee0c8c7ad863c3ceffd31a63679e1ea34a5f89e3ae0f90c5d281d4a900');
 
-if (GenesisConfig.CURRENT_CONFIG) {
-    /** @type {GenesisConfig} */
-    GenesisConfig.OLD_CONFIG = GenesisConfig.CURRENT_CONFIG;
-}
-
-/* Testing Genesis Block */
-GenesisConfig.CURRENT_CONFIG = new GenesisConfig(4, 'tests-',
-    new Block(
+GenesisConfig.CONFIGS[4] = {
+    NETWORK_ID: 4,
+    DATABASE_PREFIX: 'tests-',
+    GENESIS_BLOCK: new Block(
         new BlockHeader(
             new Hash(null),
             new Hash(null),
@@ -48,12 +43,14 @@ GenesisConfig.CURRENT_CONFIG = new GenesisConfig(4, 'tests-',
         new BlockInterlink([], new Hash(null)),
         new BlockBody(Address.fromBase64('G+RAkZY0pv47pfinGB/ku4ISwTw='), [])
     ),
-    Hash.fromBase64('+v0/HMgAMJy5MQgSV7Tn7bD56kABh8VQ/ZFBRH6ghqU='),
-    'AAIP7R94Gl77Xrk4xvszHLBXdCzC9AAAAHKYqT3gAAh2jadJcsL852C50iDDRIdlFjsNAAAAcpipPeAA',
-    []
-);
+    GENESIS_ACCOUNTS: 'AAIP7R94Gl77Xrk4xvszHLBXdCzC9AAAAHKYqT3gAAh2jadJcsL852C50iDDRIdlFjsNAAAAcpipPeAA',
+    SEED_PEERS: [WsPeerAddress.seed('node1.test', 9000, Dummy.NETCONFIG.publicKey.toHex())]
+};
+GenesisConfig.init(GenesisConfig.CONFIGS[4]);
 
-
+if (typeof global !== 'undefined') {
+    global.Dummy = Dummy;
+}
 
 if (jasmine && jasmine.DEFAULT_TIMEOUT_INTERVAL) {
     jasmine.DEFAULT_TIMEOUT_INTERVAL = 20000;
