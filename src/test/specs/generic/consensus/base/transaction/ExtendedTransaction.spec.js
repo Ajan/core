@@ -7,6 +7,7 @@ describe('ExtendedTransaction', () => {
     const validityStartHeight = 1;
     const proof = BufferUtils.fromAscii('ABCD');
     const data = BufferUtils.fromAscii('EFGH');
+    const networkId = GenesisConfig.NETWORK_ID;
 
     beforeAll((done) => {
         (async () => {
@@ -16,7 +17,7 @@ describe('ExtendedTransaction', () => {
     });
 
     it('is correctly created', () => {
-        const tx1 = new ExtendedTransaction(senderAddress, Account.Type.BASIC, recipientAddress, Account.Type.BASIC, value, fee, validityStartHeight, Transaction.Flag.NONE, data, proof);
+        const tx1 = new ExtendedTransaction(senderAddress, Account.Type.BASIC, recipientAddress, Account.Type.BASIC, value, fee, validityStartHeight, Transaction.Flag.NONE, data, proof, networkId);
 
         expect(tx1._format).toEqual(Transaction.Format.EXTENDED);
         expect(tx1.sender.equals(senderAddress)).toEqual(true);
@@ -26,12 +27,13 @@ describe('ExtendedTransaction', () => {
         expect(tx1.value).toEqual(value);
         expect(tx1.fee).toEqual(fee);
         expect(tx1.validityStartHeight).toEqual(validityStartHeight);
+        expect(tx1.networkId).toEqual(networkId);
         expect(BufferUtils.equals(tx1.data, data)).toBeTruthy();
         expect(BufferUtils.equals(tx1.proof, proof)).toBeTruthy();
     });
 
     it('is serializable and unserializable', () => {
-        const tx1 = new ExtendedTransaction(senderAddress, Account.Type.BASIC, recipientAddress, Account.Type.BASIC, value, fee, validityStartHeight, Transaction.Flag.NONE, data, proof);
+        const tx1 = new ExtendedTransaction(senderAddress, Account.Type.BASIC, recipientAddress, Account.Type.BASIC, value, fee, validityStartHeight, Transaction.Flag.NONE, data, proof, networkId);
         const tx2 = Transaction.unserialize(tx1.serialize());
 
         expect(tx2._format).toEqual(Transaction.Format.EXTENDED);
@@ -42,6 +44,7 @@ describe('ExtendedTransaction', () => {
         expect(tx2.value).toEqual(value);
         expect(tx2.fee).toEqual(fee);
         expect(tx2.validityStartHeight).toEqual(validityStartHeight);
+        expect(tx2.networkId).toEqual(networkId);
         expect(BufferUtils.equals(tx2.data, data)).toBeTruthy();
         expect(BufferUtils.equals(tx2.proof, proof)).toBeTruthy();
     });
